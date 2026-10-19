@@ -1,1 +1,52 @@
 
+/*
+ * Tarea 2: Theremin Digital con Arduino UNO
+ * Asignatura: Hardware Digital (CIN-212) - Universidad de Valparaíso
+ *
+ * Parte 1: Asignación de pines, constantes de frecuencia e
+ * inicialización.
+ */
+
+// --- ASIGNACIÓN DE PINES ---
+const int PIN_BTN_GRAVE = 2; // Botón Rango Grave
+const int PIN_BTN_MEDIO = 3; // Botón Rango Medio
+const int PIN_BTN_AGUDO = 4; // Botón Rango Agudo
+
+const int PIN_ECHO = 6;    // HC-SR04 Echo
+const int PIN_TRIG = 7;    // HC-SR04 Trigger
+const int PIN_BUZZER = 8;  // Buzzer Pasivo
+
+// --- RANGOS DE FRECUENCIA (Hz) ---
+const int FREQ_GRAVE_MIN = 131;  // Do3
+const int FREQ_GRAVE_MAX = 262;  // Do4
+const int FREQ_MEDIO_MIN = 262;  // Do4
+const int FREQ_MEDIO_MAX = 523;  // Do5
+const int FREQ_AGUDO_MIN = 523;  // Do5
+const int FREQ_AGUDO_MAX = 1047; // Do6
+
+// --- PARÁMETROS DE DISTANCIA (cm) ---
+const int DIST_MIN_CM = 5;
+const int DIST_MAX_CM = 30;
+const unsigned long TIMEOUT_ECHO = 25000;
+
+enum RangoTonal {
+  GRAVE,
+  MEDIO,
+  AGUDO
+};
+
+RangoTonal rangoActual = MEDIO;
+
+void setup() {
+  pinMode(PIN_BTN_GRAVE, INPUT_PULLUP);
+  pinMode(PIN_BTN_MEDIO, INPUT_PULLUP);
+  pinMode(PIN_BTN_AGUDO, INPUT_PULLUP);
+
+  pinMode(PIN_TRIG, OUTPUT);
+  pinMode(PIN_ECHO, INPUT);
+  pinMode(PIN_BUZZER, OUTPUT);
+
+  digitalWrite(PIN_TRIG, LOW);
+  noTone(PIN_BUZZER);
+}
+
