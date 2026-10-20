@@ -1,52 +1,145 @@
-
 /*
- * Tarea 2: Theremin Digital con Arduino UNO
- * Asignatura: Hardware Digital (CIN-212) - Universidad de Valparaíso
+ * ============================================================
+ * Tarea 2: Theremin Digital sin Contacto
+ * Asignatura: Hardware Digital (CIN-212)
+ * Universidad de Valparaiso
  *
- * Parte 1: Asignación de pines, constantes de frecuencia e
- * inicialización.
+ * Descripcion:
+ * Theremin digital controlado mediante sensor ultrasonico
+ * HC-SR04 y buzzer pasivo.
+ *
+ * Incluye:
+ * - Seleccion de 3 rangos tonales con botones INPUT_PULLUP.
+ * - Antirrebote no bloqueante mediante millis().
+ * - Filtro de promedio movil.
+ * ============================================================
  */
 
-// --- ASIGNACIÓN DE PINES ---
-const int PIN_BTN_GRAVE = 2; // Botón Rango Grave
-const int PIN_BTN_MEDIO = 3; // Botón Rango Medio
-const int PIN_BTN_AGUDO = 4; // Botón Rango Agudo
+// --- ASIGNACION DE PINES ---
+const int PIN_BTN_GRAVE = 2;   // Boton rango grave
+const int PIN_BTN_MEDIO = 3;   // Boton rango medio
+const int PIN_BTN_AGUDO = 4;   // Boton rango agudo
 
-const int PIN_ECHO = 6;    // HC-SR04 Echo
-const int PIN_TRIG = 7;    // HC-SR04 Trigger
-const int PIN_BUZZER = 8;  // Buzzer Pasivo
+const int PIN_ECHO = 6;        // HC-SR04 Echo
+const int PIN_TRIG = 7;        // HC-SR04 Trigger
+const int PIN_BUZZER = 8;      // Buzzer pasivo
 
 // --- RANGOS DE FRECUENCIA (Hz) ---
-const int FREQ_GRAVE_MIN = 131;  // Do3
-const int FREQ_GRAVE_MAX = 262;  // Do4
-const int FREQ_MEDIO_MIN = 262;  // Do4
-const int FREQ_MEDIO_MAX = 523;  // Do5
-const int FREQ_AGUDO_MIN = 523;  // Do5
-const int FREQ_AGUDO_MAX = 1047; // Do6
+const int FREQ_GRAVE_MIN = 131;   // Do3
+const int FREQ_GRAVE_MAX = 262;   // Do4
 
-// --- PARÁMETROS DE DISTANCIA (cm) ---
+const int FREQ_MEDIO_MIN = 262;   // Do4
+const int FREQ_MEDIO_MAX = 523;   // Do5
+
+const int FREQ_AGUDO_MIN = 523;   // Do5
+const int FREQ_AGUDO_MAX = 1047;  // Do6
+
+// --- PARAMETROS DEL SENSOR Y DISTANCIA ---
 const int DIST_MIN_CM = 5;
 const int DIST_MAX_CM = 30;
 const unsigned long TIMEOUT_ECHO = 25000;
 
-enum RangoTonal {
-  GRAVE,
-  MEDIO,
-  AGUDO
-};
+// --- FILTRO DE PROMEDIO MOVIL (5 MUESTRAS) ---
+const int TAMANO_FILTRO = 5;
+int lecturasDistancia[TAMANO_FILTRO];
+int indiceFiltro = 0;
+int sumaFiltro = 0;
 
+// --- ESTADOS DE RANGO TONAL ---
+enum RangoTonal { GRAVE, MEDIO, AGUDO };
 RangoTonal rangoActual = MEDIO;
 
+// --- VARIABLES DE ANTIRREBOTE ---
+const unsigned long DEBOUNCE_DELAY = 50;
+
+unsigned long ultimoTiempoGrave = 0;
+int ultimoEstadoGrave = HIGH;
+
+unsigned long ultimoTiempoMedio = 0;
+int ultimoEstadoMedio = HIGH;
+
+unsigned long ultimoTiempoAgudo = 0;
+int ultimoEstadoAgudo = HIGH;
+
+// --- PROTOTIPOS DE FUNCIONES ---
+void procesarPulsadores();
+float medirDistanciaCM();
+int filtrarDistancia(int nuevaLectura);
+void actualizarSonido(int distanciaCM);
+
 void setup() {
+  // Configuracion de entradas con resistencia Pull-Up interna
   pinMode(PIN_BTN_GRAVE, INPUT_PULLUP);
   pinMode(PIN_BTN_MEDIO, INPUT_PULLUP);
   pinMode(PIN_BTN_AGUDO, INPUT_PULLUP);
 
+  // Configuracion del sensor ultrasonico y buzzer
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
   pinMode(PIN_BUZZER, OUTPUT);
 
   digitalWrite(PIN_TRIG, LOW);
   noTone(PIN_BUZZER);
+
+  // Inicializacion del buffer del filtro
+  for (int i = 0; i < TAMANO_FILTRO; i++) {
+    lecturasDistancia[i] = 0;
+  }
 }
 
+void loop() {
+  procesarPulsadores();
+
+  float distanciaRaw = medirDistanciaCM();
+  int distanciaFiltrada =
+      filtrarDistancia((int)distanciaRaw);
+
+  actualizarSonido(distanciaFiltrada);
+}
+
+// --- ANTIRREBOTE POR SOFTWARE NO BLOQUEANTE ---
+void procesarPulsadores() {
+  unsigned long tiempoActual = millis();
+
+  // Boton Grave (D2)
+  int lecturaGrave = digitalRead(PIN_BTN_GRAVE);
+
+  if (lecturaGrave != ultimoEstadoGrave) {
+    ultimoTiempoGrave = tiempoActual;
+    ultimoEstadoGrave = lecturaGrave;
+  }
+
+  if ((tiempoActual - ultimoTiempoGrave) > DEBOUNCE_DELAY) {
+    if (lecturaGrave == LOW) {
+      rangoActual = GRAVE;
+    }
+  }
+
+  // Boton Medio (D3)
+  int lecturaMedio = digitalRead(PIN_BTN_MEDIO);
+
+  if (lecturaMedio != ultimoEstadoMedio) {
+    ultimoTiempoMedio = tiempoActual;
+    ultimoEstadoMedio = lecturaMedio;
+  }
+
+  if ((tiempoActual - ultimoTiempoMedio) > DEBOUNCE_DELAY) {
+    if (lecturaMedio == LOW) {
+      rangoActual = MEDIO;
+    }
+  }
+
+  // Boton Agudo (D4)
+  int lecturaAgudo = digitalRead(PIN_BTN_AGUDO);
+
+  if (lecturaAgudo != ultimoEstadoAgudo) {
+    ultimoTiempoAgudo = tiempoActual;
+    ultimoEstadoAgudo = lecturaAgudo;
+  }
+
+  if ((tiempoActual - ultimoTiempoAgudo) > DEBOUNCE_DELAY) {
+    if (lecturaAgudo == LOW) {
+      rangoActual = AGUDO;
+    }
+  }
+}
