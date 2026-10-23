@@ -1,28 +1,24 @@
+
 /*
- * ============================================================
+ * ============================================================================
  * Tarea 2: Theremin Digital sin Contacto
  * Asignatura: Hardware Digital (CIN-212)
  * Universidad de Valparaiso
  *
- * Descripcion:
- * Theremin digital controlado mediante sensor ultrasonico
- * HC-SR04 y buzzer pasivo.
- *
- * Incluye:
- * - Seleccion de 3 rangos tonales con botones INPUT_PULLUP.
- * - Antirrebote no bloqueante mediante millis().
- * - Filtro de promedio movil.
- * ============================================================
+ * Estudiante: Benjamin Yuliano Saravia Briceno
+ * Carrera: Ingenieria Civil Informatica
+ * Placa: Arduino UNO R3 / ATmega328P
+ * ============================================================================
  */
 
 // --- ASIGNACION DE PINES ---
-const int PIN_BTN_GRAVE = 2;   // Boton rango grave
-const int PIN_BTN_MEDIO = 3;   // Boton rango medio
-const int PIN_BTN_AGUDO = 4;   // Boton rango agudo
+const int PIN_BTN_GRAVE = 2;
+const int PIN_BTN_MEDIO = 3;
+const int PIN_BTN_AGUDO = 4;
 
-const int PIN_ECHO = 6;        // HC-SR04 Echo
-const int PIN_TRIG = 7;        // HC-SR04 Trigger
-const int PIN_BUZZER = 8;      // Buzzer pasivo
+const int PIN_ECHO = 6;
+const int PIN_TRIG = 7;
+const int PIN_BUZZER = 8;
 
 // --- RANGOS DE FRECUENCIA (Hz) ---
 const int FREQ_GRAVE_MIN = 131;   // Do3
@@ -34,22 +30,27 @@ const int FREQ_MEDIO_MAX = 523;   // Do5
 const int FREQ_AGUDO_MIN = 523;   // Do5
 const int FREQ_AGUDO_MAX = 1047;  // Do6
 
-// --- PARAMETROS DEL SENSOR Y DISTANCIA ---
+// --- DISTANCIAS (cm) ---
 const int DIST_MIN_CM = 5;
 const int DIST_MAX_CM = 30;
 const unsigned long TIMEOUT_ECHO = 25000;
 
-// --- FILTRO DE PROMEDIO MOVIL (5 MUESTRAS) ---
+// --- FILTRO DE PROMEDIO MOVIL ---
 const int TAMANO_FILTRO = 5;
 int lecturasDistancia[TAMANO_FILTRO];
 int indiceFiltro = 0;
 int sumaFiltro = 0;
 
-// --- ESTADOS DE RANGO TONAL ---
-enum RangoTonal { GRAVE, MEDIO, AGUDO };
+// --- ESTADOS DEL RANGO TONAL ---
+enum RangoTonal {
+  GRAVE,
+  MEDIO,
+  AGUDO
+};
+
 RangoTonal rangoActual = MEDIO;
 
-// --- VARIABLES DE ANTIRREBOTE ---
+// --- ANTIRREBOTE ---
 const unsigned long DEBOUNCE_DELAY = 50;
 
 unsigned long ultimoTiempoGrave = 0;
@@ -61,19 +62,17 @@ int ultimoEstadoMedio = HIGH;
 unsigned long ultimoTiempoAgudo = 0;
 int ultimoEstadoAgudo = HIGH;
 
-// --- PROTOTIPOS DE FUNCIONES ---
+// --- PROTOTIPOS ---
 void procesarPulsadores();
 float medirDistanciaCM();
 int filtrarDistancia(int nuevaLectura);
 void actualizarSonido(int distanciaCM);
 
 void setup() {
-  // Configuracion de entradas con resistencia Pull-Up interna
   pinMode(PIN_BTN_GRAVE, INPUT_PULLUP);
   pinMode(PIN_BTN_MEDIO, INPUT_PULLUP);
   pinMode(PIN_BTN_AGUDO, INPUT_PULLUP);
 
-  // Configuracion del sensor ultrasonico y buzzer
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
   pinMode(PIN_BUZZER, OUTPUT);
@@ -81,7 +80,6 @@ void setup() {
   digitalWrite(PIN_TRIG, LOW);
   noTone(PIN_BUZZER);
 
-  // Inicializacion del buffer del filtro
   for (int i = 0; i < TAMANO_FILTRO; i++) {
     lecturasDistancia[i] = 0;
   }
@@ -91,13 +89,12 @@ void loop() {
   procesarPulsadores();
 
   float distanciaRaw = medirDistanciaCM();
-  int distanciaFiltrada =
-      filtrarDistancia((int)distanciaRaw);
+  int distanciaFiltrada = filtrarDistancia((int)distanciaRaw);
 
   actualizarSonido(distanciaFiltrada);
 }
 
-// --- ANTIRREBOTE POR SOFTWARE NO BLOQUEANTE ---
+// --- ANTIRREBOTE POR SOFTWARE ---
 void procesarPulsadores() {
   unsigned long tiempoActual = millis();
 
@@ -142,4 +139,74 @@ void procesarPulsadores() {
       rangoActual = AGUDO;
     }
   }
+}
+
+// --- LECTURA DEL SENSOR HC-SR04 ---
+float medirDistanciaCM() {
+  digitalWrite(PIN_TRIG, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(PIN_TRIG, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(PIN_TRIG, LOW);
+
+  unsigned long duracionUS =
+      pulseIn(PIN_ECHO, HIGH, TIMEOUT_ECHO);
+
+  if (duracionUS == 0) {
+    return -1.0;
+  }
+
+  return (duracionUS * 0.0343) / 2.0;
+}
+
+// --- FILTRO DE PROMEDIO MOVIL ---
+int filtrarDistancia(int nuevaLectura) {
+  if (nuevaLectura < 0) {
+    return -1;
+  }
+
+  sumaFiltro -= lecturasDistancia[indiceFiltro];
+  lecturasDistancia[indiceFiltro] = nuevaLectura;
+  sumaFiltro += nuevaLectura;
+
+  indiceFiltro = (indiceFiltro + 1) % TAMANO_FILTRO;
+
+  return sumaFiltro / TAMANO_FILTRO;
+}
+
+// --- CONTROL DE FRECUENCIA DEL BUZZER ---
+void actualizarSonido(int distanciaCM) {
+  if (distanciaCM < DIST_MIN_CM ||
+      distanciaCM > DIST_MAX_CM) {
+    noTone(PIN_BUZZER);
+    return;
+  }
+
+  int freqMin = FREQ_MEDIO_MIN;
+  int freqMax = FREQ_MEDIO_MAX;
+
+  if (rangoActual == GRAVE) {
+    freqMin = FREQ_GRAVE_MIN;
+    freqMax = FREQ_GRAVE_MAX;
+  } else if (rangoActual == MEDIO) {
+    freqMin = FREQ_MEDIO_MIN;
+    freqMax = FREQ_MEDIO_MAX;
+  } else if (rangoActual == AGUDO) {
+    freqMin = FREQ_AGUDO_MIN;
+    freqMax = FREQ_AGUDO_MAX;
+  }
+
+  int frecuencia = map(
+      distanciaCM,
+      DIST_MIN_CM,
+      DIST_MAX_CM,
+      freqMax,
+      freqMin
+  );
+
+  frecuencia = constrain(frecuencia, freqMin, freqMax);
+
+  tone(PIN_BUZZER, frecuencia);
 }
